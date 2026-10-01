@@ -6,6 +6,7 @@ describe('MovaPayDB', () => {
 	beforeEach(async () => {
 		await db.products.clear();
 		await db.pending_sales.clear();
+		await db.cart.clear();
 	});
 
 	it('stores and retrieves a product', async () => {
@@ -60,5 +61,22 @@ describe('MovaPayDB', () => {
 		const unsynced = await db.pending_sales.where('synced').equals(0).toArray();
 		expect(unsynced).toHaveLength(1);
 		expect(unsynced[0].local_id).toBe('a');
+	});
+
+	it('keeps one cart per tenant', async () => {
+		await db.cart.put({
+			tenant_id: 'tenant-A',
+			items: [{ product_id: 'p1', name: 'Café', price_cents: 350, qty: 1 }]
+		});
+		await db.cart.put({
+			tenant_id: 'tenant-B',
+			items: [{ product_id: 'p2', name: 'Empanada', price_cents: 200, qty: 2 }]
+		});
+
+		const cartA = await db.cart.get('tenant-A');
+		const cartB = await db.cart.get('tenant-B');
+		expect(cartA?.items).toHaveLength(1);
+		expect(cartA?.items[0].name).toBe('Café');
+		expect(cartB?.items[0].qty).toBe(2);
 	});
 });

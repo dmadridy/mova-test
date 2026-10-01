@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../app.css';
+	import { get } from 'svelte/store';
 	import { page } from '$app/stores';
 	import { auth, isTenantId } from '$lib/stores/auth';
 	import { online } from '$lib/stores/online';
@@ -16,10 +17,13 @@
 	let busy = false;
 	let loginError = '';
 	let tenantName = '';
+	let cartReadyFor = '';
 
-	// El carrito y el dashboard son del tenant: no pueden pasar al siguiente.
+	// El carrito queda en IndexedDB bajo el tenant. En memoria se suelta
+	// para que el siguiente comercio no lo vea; al volver, `load` lo recupera.
 	function logout() {
-		cartStore.clear();
+		cartStore.unload();
+		cartReadyFor = '';
 		dashboardStore.reset();
 		tenantName = '';
 		auth.logout();
@@ -83,6 +87,12 @@
 		getTenant($auth)
 			.then((t) => (tenantName = t.name))
 			.catch(() => (tenantName = ''));
+	}
+	$: if ($auth && cartReadyFor !== $auth) {
+		const id = $auth;
+		cartStore.load(id).then(() => {
+			if (get(auth) === id) cartReadyFor = id;
+		});
 	}
 </script>
 
@@ -152,7 +162,11 @@
 		</nav>
 
 		<main class="content">
-			<slot />
+			{#if cartReadyFor === $auth}
+				<slot />
+			{:else}
+				<p class="loading">Cargando…</p>
+			{/if}
 		</main>
 	</div>
 {/if}
@@ -201,6 +215,7 @@
 		gap: 0.5rem;
 	}
 	.brand { font-weight: 700; font-size: 1.1rem; }
+	.loading { color: var(--text-muted); }
 
 	.content {
 		flex: 1;
